@@ -1,20 +1,49 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import random as ran
 import tensorflow as tf
 import numpy as np
-from matplotlib import pyplot as plt
+
+## Applying SOM into Mnist data
+
+from tensorflow.examples.tutorials.mnist import input_data
+mnist = input_data.read_data_sets("MNIST_data", one_hot=True)
+
+def train_size(num):
+    x_train = mnist.train.images[:num,:]
+    y_train = mnist.train.labels[:num,:]
+    return x_train, y_train
+
+x_train, y_train = train_size(100)
+x_test, y_test = train_size(110)
+x_test = x_test[100:110,:]; y_test = y_test[100:110,:]
+
+def display_digit(num):
+    label = y_train[num].argmax(axis=0)
+    image = x_train[num].reshape([28,28])
+    plt.title('Example: %d  Label: %d' % (num, label))
+    plt.imshow(image, cmap=plt.get_cmap('gray_r'))
+    plt.show()
+
+display_digit(ran.randint(0, x_train.shape[0]))
+
+# Import som class and train into 30 * 30 sized of SOM lattice
+#from som import SOM
 
 class SOM(object):
     """
     2-D Self-Organizing Map with Gaussian Neighbourhood function
     and linearly decreasing learning rate.
     """
+
     # To check if the SOM has been trained
     _trained = False
-
 
     def __init__(self, m, n, dim, n_iterations=100, alpha=None, sigma=None):
         """
         Initializes all necessary components of the TensorFlow
         Graph.
+
         m X n are the dimensions of the SOM. 'n_iterations' should
         should be an integer denoting the number of iterations undergone
         while training.
@@ -77,21 +106,20 @@ class SOM(object):
             # index of the neuron which gives the least value
             bmu_index = tf.argmin(tf.sqrt(tf.reduce_sum(
                 tf.pow(tf.subtract(self._weightage_vects, tf.stack(
-                    [self._vect_input for i in range(m * n)])), 2), 1)), 0)
+                    [self._vect_input for i in range(m * n)])), 2), 1)),
+                0)
 
             # This will extract the location of the BMU based on the BMU's
             # index
             slice_input = tf.pad(tf.reshape(bmu_index, [1]),
                                  np.array([[0, 1]]))
-            # bmu_loc = tf.reshape(tf.slice(self._location_vects, slice_input,
-            #                               tf.constant(np.array([1, 2]))), [2])
             bmu_loc = tf.reshape(tf.slice(self._location_vects, slice_input,
                                           tf.constant(np.array([1, 2]), dtype=tf.int64)), [2])
 
             # To compute the alpha and sigma values based on iteration
             # number
             learning_rate_op = tf.subtract(1.0, tf.div(self._iter_input,
-                                                       self._n_iterations))
+                                                  self._n_iterations))
             _alpha_op = tf.multiply(alpha, learning_rate_op)
             _sigma_op = tf.multiply(sigma, learning_rate_op)
 
@@ -114,7 +142,7 @@ class SOM(object):
             weightage_delta = tf.multiply(
                 learning_rate_multiplier,
                 tf.subtract(tf.stack([self._vect_input for i in range(m * n)]),
-                            self._weightage_vects))
+                       self._weightage_vects))
             new_weightages_op = tf.add(self._weightage_vects,
                                        weightage_delta)
             self._training_op = tf.assign(self._weightage_vects,
@@ -195,46 +223,54 @@ class SOM(object):
                                                          self._weightages[x]))
             to_return.append(self._locations[min_index])
 
-            return to_return
+        return to_return
 
+som = SOM(30, 30, x_train.shape[1], 20)
+som.train(x_train)
 
-# Training inputs for RGBcolors
-colors = np.array(
-    [[1., 1., 1.],
-     [0., 0., 0.],
-     [0., 0., 1.],
-     [0., 0., 0.5],
-     [0.125, 0.529, 1.0],
-     [0.33, 0.4, 0.67],
-     [0.6, 0.5, 1.0],
-     [0., 1., 0.],
-     [1., 0., 0.],
-     [0., 1., 1.],
-     [1., 0., 1.],
-     [1., 1., 0.],
-     [.33, .33, .33],
-     [.5, .5, .5],
-     [.66, .66, .66]])
-color_names = \
-    ['black', 'blue', 'darkblue', 'skyblue',
-     'greyblue', 'lilac', 'green', 'red',
-     'cyan', 'violet', 'yellow', 'white',
-     'darkgrey', 'mediumgrey', 'lightgrey']
+# Fit train data into SOM lattice
+mapped = som.map_vects(x_train)
+mappedarr = np.array(mapped)
+x1 = mappedarr[:,0]; y1 = mappedarr[:,1]
 
-# Train a 20x30 SOM with 400 iterations
-som = SOM(20, 30, 3, 10000)
-som.train(colors)
+index = [ np.where(r==1)[0][0] for r in y_train ]
+index = list(map(str, index))
 
-# Get output grid
-image_grid = som.get_centroids()
+## Plots: 1) Train 2) Test+Train ###
 
-# Map colours to their closest neurons
-mapped = som.map_vects(colors)
-
-# Plot
-plt.imshow(image_grid)
-plt.title('Color SOM')
+plt.figure(1, figsize=(12,6))
+plt.subplot(121)
+# Plot 1 for Training only
+plt.scatter(x1,y1)
+# Just adding text
 for i, m in enumerate(mapped):
-    plt.text(m[1], m[0], color_names[i], ha='center', va='center',
-             bbox=dict(facecolor='white', alpha=0.5, lw=0))
+    plt.text( m[0], m[1],index[i], ha='center', va='center', bbox=dict(facecolor='white', alpha=0.5, lw=0))
+plt.title('Train MNIST 100')
+
+# Testing
+mappedtest = som.map_vects(x_test)
+mappedtestarr = np.array(mappedtest)
+x2 = mappedtestarr[:,0]
+y2 = mappedtestarr[:,1]
+
+index2 = [ np.where(r==1)[0][0] for r in y_test ]
+index2 = list(map(str, index2))
+
+plt.subplot(122)
+# Plot 2: Training + Testing
+plt.scatter(x1,y1)
+# Just adding text
+for i, m in enumerate(mapped):
+    plt.text( m[0], m[1],index[i], ha='center', va='center', bbox=dict(facecolor='white', alpha=0.5, lw=0))
+
+plt.scatter(x2,y2)
+# Just adding text
+for i, m in enumerate(mappedtest):
+    plt.text( m[0], m[1],index2[i], ha='center', va='center', bbox=dict(facecolor='red', alpha=0.5, lw=0))
+plt.title('Test MNIST 10 + Train MNIST 100')
+
 plt.show()
+
+
+
+
